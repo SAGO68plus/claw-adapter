@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/python-3.10+-blue?logo=python&logoColor=white" alt="Python">
   <img src="https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi&logoColor=white" alt="FastAPI">
   <img src="https://img.shields.io/badge/SQLite-WAL-003B57?logo=sqlite&logoColor=white" alt="SQLite">
-  <img src="https://img.shields.io/badge/license-private-red" alt="License">
+  <img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License">
 </p>
 
 ---
@@ -124,5 +124,5 @@ claw-adapter/
 ---
 
 <p align="center">
-  <sub>Private — 仅供个人使用</sub>
+  <sub>Licensed under the Apache License 2.0</sub>
 </p>
