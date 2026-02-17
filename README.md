@@ -24,7 +24,7 @@
 ClawAdapter 把服务商、密钥、下游服务的配置集中到一处管理，绑定之后改一次就能同步到所有关联的服务。
 
 <p align="center">
-  <img src="screenshot.jpg" width="800" alt="ClawAdapter 界面">
+  <img src="screenshot.png" width="800" alt="ClawAdapter 界面">
 </p>
 
 ## 架构
