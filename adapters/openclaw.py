@@ -8,7 +8,7 @@ from .base import BaseAdapter
 class OpenClawAdapter(BaseAdapter):
     id = "openclaw"
     label = "OpenClaw"
-    default_config_path = "/root/.openclaw/openclaw.json"
+    default_config_path = os.path.expanduser("~/.openclaw/openclaw.json")
 
     def read_current(self, config_path: str) -> Optional[Dict[str, Any]]:
         path = config_path or self.default_config_path

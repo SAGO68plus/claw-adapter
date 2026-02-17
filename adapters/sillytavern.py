@@ -10,7 +10,7 @@ from .base import BaseAdapter
 class SillyTavernAdapter(BaseAdapter):
     id = "sillytavern"
     label = "SillyTavern"
-    default_config_path = "/root/SillyTavern/data/default-user"
+    default_config_path = os.path.expanduser("~/SillyTavern/data/default-user")
 
     def _secrets_path(self, config_path: str) -> str:
         base = config_path or self.default_config_path

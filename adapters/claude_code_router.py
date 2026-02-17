@@ -8,7 +8,7 @@ from .base import BaseAdapter
 class ClaudeCodeRouterAdapter(BaseAdapter):
     id = "claude_code_router"
     label = "Claude Code Router"
-    default_config_path = "/root/.claude-code-router/config.json"
+    default_config_path = os.path.expanduser("~/.claude-code-router/config.json")
 
     def read_current(self, config_path: str) -> Optional[Dict[str, Any]]:
         path = config_path or self.default_config_path
