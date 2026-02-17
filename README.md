@@ -1,11 +1,15 @@
 <p align="center">
+  <strong>English</strong> | <a href="README_CN.md">中文</a>
+</p>
+
+<p align="center">
   <img src="icon.png" width="120" alt="ClawAdapter">
 </p>
 
 <h1 align="center">ClawAdapter</h1>
 
 <p align="center">
-  <strong>轻量级 API 密钥与服务配置管理中间件</strong>
+  <strong>Lightweight API Key & Service Configuration Management Middleware</strong>
 </p>
 
 <p align="center">
@@ -17,62 +21,62 @@
 
 ---
 
-## 🚧 开发中
+## 🚧 Work in Progress
 
-- API 站计价功能正在制作中
-- 桑基图部分显示效果待优化
+- API pricing feature under development
+- Sankey diagram display optimizations pending
 
-## 简介
+## Overview
 
-管多个 AI 服务的 API Key 很烦——每个服务各自配置，改一个 key 要到处粘贴。
+Managing API keys across multiple AI services is painful — each service has its own config, and changing one key means copy-pasting everywhere.
 
-ClawAdapter 把服务商、密钥、下游服务的配置集中到一处管理，绑定之后改一次就能同步到所有关联的服务。
+ClawAdapter centralizes vendor, key, and downstream service configuration in one place. Once bound, a single change syncs to all linked services automatically.
 
 <p align="center">
-  <img src="imgFrontPage.png" width="800" alt="ClawAdapter 界面">
+  <img src="imgFrontPage.png" width="800" alt="ClawAdapter UI">
 </p>
 
-## 架构
+## Architecture
 
 ```
 Vendor → Key → Provider → Adapter → Service
 ```
 
-五层严格流向，不允许跳层。Provider 必须关联 Key，Key 必须属于 Vendor。
+Strict five-layer flow — no skipping layers. Every Provider must be linked to a Key, and every Key must belong to a Vendor.
 
-## 功能
+## Features
 
-| 功能 | 说明 |
-|------|------|
-| 🏢 服务商管理 | 集中管理 Vendor、Key、Provider |
-| 🔌 适配器 | 当前支持 OpenClaw / SillyTavern / Claude Code Router，新增只需继承 BaseAdapter |
-| 🔄 配置同步 | 绑定 Provider 到 Adapter，修改后自动同步 |
-| 🔐 密钥加密 | Fernet 加密存储，密钥文件权限隔离 |
-| 📊 拓扑可视化 | ECharts 桑基图展示完整配置链路 |
+| Feature | Description |
+|---------|-------------|
+| 🏢 Vendor Management | Centralized management of Vendors, Keys, and Providers |
+| 🔌 Adapters | Currently supports OpenClaw / SillyTavern / Claude Code Router. Add new ones by extending BaseAdapter |
+| 🔄 Config Sync | Bind Providers to Adapters with automatic sync on changes |
+| 🔐 Key Encryption | Fernet-encrypted storage with isolated key file permissions |
+| 📊 Topology Visualization | ECharts Sankey diagram showing the full configuration chain |
 
-## 快速开始
+## Quick Start
 
-### 安装依赖
+### Install Dependencies
 
 ```bash
 pip install fastapi uvicorn cryptography python-multipart
 ```
 
-### 启动
+### Run
 
 ```bash
 python main.py
 ```
 
-默认运行在 `http://localhost:8900`。
+Runs on `http://localhost:8900` by default.
 
-首次启动会自动创建数据库、生成加密密钥、注册内置适配器。
+On first launch, the database, encryption key, and built-in adapters are created automatically.
 
-> ⚠️ `.vault_key` 是所有 API Key 的加密根密钥，丢失后已存储的密钥无法解密。
+> ⚠️ `.vault_key` is the root encryption key for all API keys. If lost, stored keys cannot be decrypted.
 
-## 扩展适配器
+## Extending Adapters
 
-1. 在 `adapters/` 下新建文件，继承 `BaseAdapter`：
+1. Create a new file under `adapters/`, extending `BaseAdapter`:
 
 ```python
 from .base import BaseAdapter
@@ -89,17 +93,17 @@ class MyServiceAdapter(BaseAdapter):
         ...
 ```
 
-2. 在 `adapters/__init__.py` 中导入并注册。
+2. Import and register it in `adapters/__init__.py`.
 
-## 项目结构
+## Project Structure
 
 ```
 claw-adapter/
-├── main.py              # FastAPI 入口
-├── db.py                # 数据库 + 加密
-├── models.py            # Pydantic 模型
+├── main.py              # FastAPI entry point
+├── db.py                # Database + encryption
+├── models.py            # Pydantic models
 ├── adapters/
-│   ├── base.py          # 适配器基类
+│   ├── base.py          # Adapter base class
 │   ├── openclaw.py
 │   ├── sillytavern.py
 │   └── claude_code_router.py
@@ -115,11 +119,11 @@ claw-adapter/
     └── app.js
 ```
 
-## 技术栈
+## Tech Stack
 
 - Python + FastAPI + Uvicorn
-- SQLite (WAL) + Fernet 加密
-- 原生 HTML/JS + ECharts
+- SQLite (WAL) + Fernet encryption
+- Vanilla HTML/JS + ECharts
 
 ---
 
