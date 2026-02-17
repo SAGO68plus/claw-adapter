@@ -1,0 +1,19 @@
+# Secrets
+.vault_key
+
+# Databases
+*.db
+*.db.bak
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Uploads (user content)
+uploads/
+
+# IDE
+.vscode/
+.idea/
+*:Zone.Identifier
