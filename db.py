@@ -1,6 +1,7 @@
 """SQLite database + Fernet encryption for API keys."""
 import os
 import sqlite3
+from contextlib import contextmanager
 from cryptography.fernet import Fernet
 
 DB_PATH = os.environ.get("VAULT_DB", os.path.join(os.path.dirname(__file__), "vault.db"))
@@ -33,6 +34,25 @@ def get_db() -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
+
+
+@contextmanager
+def get_db_ctx():
+    """Context manager for manual use: with get_db_ctx() as db: ..."""
+    conn = get_db()
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+def get_db_dep():
+    """FastAPI Depends generator: db = Depends(get_db_dep)"""
+    conn = get_db()
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 def init_db():
     conn = get_db()

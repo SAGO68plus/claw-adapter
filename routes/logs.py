@@ -1,8 +1,9 @@
 """Request log ingestion route."""
-from fastapi import APIRouter
+import sqlite3
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import Optional
-from db import get_db
+from db import get_db_dep
 
 router = APIRouter(prefix="/api/logs", tags=["logs"])
 
@@ -21,9 +22,8 @@ class LogEntry(BaseModel):
 
 
 @router.post("/ingest")
-def ingest_log(entry: LogEntry):
+def ingest_log(entry: LogEntry, db: sqlite3.Connection = Depends(get_db_dep)):
     """Receive a request log entry from external services."""
-    db = get_db()
     db.execute(
         """INSERT INTO request_logs
            (vendor_id, vendor_key_id, provider_id, adapter_id, model,
@@ -34,14 +34,12 @@ def ingest_log(entry: LogEntry):
          entry.cost, entry.status_code, entry.latency_ms),
     )
     db.commit()
-    db.close()
     return {"ok": True}
 
 
 @router.post("/ingest/batch")
-def ingest_batch(entries: list[LogEntry]):
+def ingest_batch(entries: list[LogEntry], db: sqlite3.Connection = Depends(get_db_dep)):
     """Receive multiple log entries at once."""
-    db = get_db()
     for e in entries:
         db.execute(
             """INSERT INTO request_logs
@@ -53,5 +51,4 @@ def ingest_batch(entries: list[LogEntry]):
              e.cost, e.status_code, e.latency_ms),
         )
     db.commit()
-    db.close()
     return {"ok": True, "count": len(entries)}

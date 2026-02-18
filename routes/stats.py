@@ -1,15 +1,15 @@
 """Stats & request log routes."""
-from fastapi import APIRouter, Query
+import sqlite3
+from fastapi import APIRouter, Query, Depends
 from typing import Optional
-from db import get_db
+from db import get_db_dep
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])
 
 
 @router.get("/overview")
-def get_overview():
+def get_overview(db: sqlite3.Connection = Depends(get_db_dep)):
     """Global stats: counts of vendors, keys, providers, bindings, adapters, logs."""
-    db = get_db()
     vendors = db.execute("SELECT COUNT(*) as c FROM vendors").fetchone()["c"]
     keys = db.execute("SELECT COUNT(*) as c FROM vendor_keys").fetchone()["c"]
     providers = db.execute("SELECT COUNT(*) as c FROM providers").fetchone()["c"]
@@ -22,7 +22,6 @@ def get_overview():
     total_cost = db.execute("SELECT COALESCE(SUM(cost),0) as c FROM request_logs").fetchone()["c"]
     # Key status summary
     keys_active = db.execute("SELECT COUNT(*) as c FROM vendor_keys WHERE status='active'").fetchone()["c"]
-    db.close()
     return {
         "vendors": vendors, "keys": keys, "keys_active": keys_active,
         "providers": providers, "bindings": bindings, "adapters": adapters,
@@ -40,9 +39,9 @@ def get_usage(
     vendor_key_id: Optional[int] = None,
     provider_id: Optional[int] = None,
     adapter_id: Optional[str] = None,
+    db: sqlite3.Connection = Depends(get_db_dep),
 ):
     """Time-series usage data grouped by day."""
-    db = get_db()
     where = []
     params = []
     if range != "all":
@@ -68,15 +67,13 @@ def get_usage(
         GROUP BY date(created_at)
         ORDER BY day
     """, params).fetchall()
-    db.close()
     return [{"day": r["day"], "requests": r["requests"],
              "input_tokens": r["input_tokens"], "output_tokens": r["output_tokens"],
              "cost": round(r["cost"], 4)} for r in rows]
 
 
 @router.get("/by-vendor")
-def stats_by_vendor():
-    db = get_db()
+def stats_by_vendor(db: sqlite3.Connection = Depends(get_db_dep)):
     rows = db.execute("""
         SELECT r.vendor_id, v.name as vendor_name,
                COUNT(*) as requests,
@@ -86,15 +83,13 @@ def stats_by_vendor():
         FROM request_logs r LEFT JOIN vendors v ON r.vendor_id=v.id
         GROUP BY r.vendor_id ORDER BY requests DESC
     """).fetchall()
-    db.close()
     return [{"vendor_id": r["vendor_id"], "vendor_name": r["vendor_name"] or "unknown",
              "requests": r["requests"], "input_tokens": r["input_tokens"],
              "output_tokens": r["output_tokens"], "cost": round(r["cost"], 4)} for r in rows]
 
 
 @router.get("/by-model")
-def stats_by_model():
-    db = get_db()
+def stats_by_model(db: sqlite3.Connection = Depends(get_db_dep)):
     rows = db.execute("""
         SELECT model, COUNT(*) as requests,
                COALESCE(SUM(input_tokens),0) as input_tokens,
@@ -103,15 +98,13 @@ def stats_by_model():
         FROM request_logs WHERE model != ''
         GROUP BY model ORDER BY requests DESC
     """).fetchall()
-    db.close()
     return [{"model": r["model"], "requests": r["requests"],
              "input_tokens": r["input_tokens"], "output_tokens": r["output_tokens"],
              "cost": round(r["cost"], 4)} for r in rows]
 
 
 @router.get("/by-key")
-def stats_by_key(vendor_id: Optional[int] = None):
-    db = get_db()
+def stats_by_key(vendor_id: Optional[int] = None, db: sqlite3.Connection = Depends(get_db_dep)):
     where = ""
     params = []
     if vendor_id is not None:
@@ -129,7 +122,6 @@ def stats_by_key(vendor_id: Optional[int] = None):
         {where}
         GROUP BY r.vendor_key_id ORDER BY requests DESC
     """, params).fetchall()
-    db.close()
     return [{"vendor_key_id": r["vendor_key_id"], "key_label": r["key_label"] or "unknown",
              "vendor_name": r["vendor_name"] or "", "requests": r["requests"],
              "input_tokens": r["input_tokens"], "output_tokens": r["output_tokens"],
@@ -144,9 +136,9 @@ def get_logs(
     vendor_key_id: Optional[int] = None,
     provider_id: Optional[int] = None,
     model: Optional[str] = None,
+    db: sqlite3.Connection = Depends(get_db_dep),
 ):
     """Paginated request logs."""
-    db = get_db()
     where = []
     params = []
     if vendor_id is not None:
@@ -168,7 +160,6 @@ def get_logs(
         LEFT JOIN providers p ON r.provider_id=p.id
         {w} ORDER BY r.created_at DESC LIMIT ? OFFSET ?
     """, params + [limit, offset]).fetchall()
-    db.close()
     return {
         "total": total, "page": page, "limit": limit,
         "items": [{"id": r["id"], "vendor_name": r["vendor_name"] or "",

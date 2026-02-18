@@ -251,8 +251,13 @@ function renderKeyGroup(k, providers, vid) {
       '</div>' +
       '<div class="btn-group">' +
         '<button class="btn btn-ghost-accent btn-sm" onclick="showAddProviderForKey(' + vid + ',' + k.id + ')">+ 配置</button>' +
-        '<button class="btn btn-sm" onclick="editKey(' + k.id + ')">编辑</button>' +
-        '<button class="btn btn-sm btn-ghost-danger" onclick="delKey(' + k.id + ')">删除</button>' +
+        '<div class="dropdown">' +
+          '<button class="dropdown-trigger" onclick="toggleDropdown(this)">⋮</button>' +
+          '<div class="dropdown-menu">' +
+            '<button class="dropdown-item" onclick="editKey(' + k.id + ')">编辑</button>' +
+            '<button class="dropdown-item dropdown-item-danger" onclick="delKey(' + k.id + ')">删除</button>' +
+          '</div>' +
+        '</div>' +
       '</div>' +
     '</div>' +
     provHtml +
@@ -433,12 +438,12 @@ async function saveKey() {
 }
 
 async function delKey(kid) {
-  showConfirm('确定删除该 Key？使用此 Key 的配置将取消关联。', async function() {
+  showConfirm('确定删除该 Key？', async function() {
     try {
       await api('/api/keys/' + kid, { method: 'DELETE' });
       toast('已删除');
       loadVendors();
-    } catch (e) { toast(e.message, false); }
+    } catch (e) { toast(e.message || '删除失败', false); }
   });
 }
 
