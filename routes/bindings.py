@@ -9,7 +9,7 @@ from models import BindingCreate, BindingOut
 router = APIRouter(prefix="/api/sync", tags=["bindings"])
 
 
-@router.get("/bindings", response_model=List[BindingOut])
+@router.get("/bindings")
 def list_bindings(provider_id: Optional[int] = None, adapter_id: Optional[str] = None,
                   db: sqlite3.Connection = Depends(get_db_dep)):
     sql = """SELECT b.*, p.name as p_name, a.label as a_label
@@ -25,14 +25,38 @@ def list_bindings(provider_id: Optional[int] = None, adapter_id: Optional[str] =
         sql += " AND b.adapter_id=?"
         params.append(adapter_id)
     rows = db.execute(sql, params).fetchall()
-    return [BindingOut(
-        id=r["id"], provider_id=r["provider_id"], provider_name=r["p_name"] or "",
-        adapter_id=r["adapter_id"], adapter_label=r["a_label"] or "",
-        target_provider_name=r["target_provider_name"], auto_sync=bool(r["auto_sync"]),
-    ) for r in rows]
+
+    # Collect live endpoints per adapter for orphan detection
+    adapter_live: dict[str, set[str]] = {}
+    for r in rows:
+        aid = r["adapter_id"]
+        if aid not in adapter_live:
+            adapter = get_adapter(aid)
+            if adapter:
+                arow = db.execute("SELECT config_path FROM adapters WHERE id=?", (aid,)).fetchone()
+                config_path = arow["config_path"] if arow else ""
+                current = adapter.read_current(config_path)
+                names = set()
+                if current and "providers" in current:
+                    names = {p.get("provider_name", "") for p in current["providers"] if p.get("provider_name")}
+                adapter_live[aid] = names
+            else:
+                adapter_live[aid] = set()
+
+    result = []
+    for r in rows:
+        live = adapter_live.get(r["adapter_id"], set())
+        orphaned = bool(r["target_provider_name"] and r["target_provider_name"] not in live)
+        result.append({
+            "id": r["id"], "provider_id": r["provider_id"], "provider_name": r["p_name"] or "",
+            "adapter_id": r["adapter_id"], "adapter_label": r["a_label"] or "",
+            "target_provider_name": r["target_provider_name"], "auto_sync": bool(r["auto_sync"]),
+            "orphaned": orphaned,
+        })
+    return result
 
 
-@router.post("/bindings", response_model=BindingOut)
+@router.post("/bindings")
 def create_binding(b: BindingCreate, db: sqlite3.Connection = Depends(get_db_dep)):
     provider = db.execute("SELECT * FROM providers WHERE id=?", (b.provider_id,)).fetchone()
     if not provider:
@@ -53,6 +77,17 @@ def create_binding(b: BindingCreate, db: sqlite3.Connection = Depends(get_db_dep
             f"服务内端点 '{b.target_provider_name}' 在 {b.adapter_id} 中已被端点配置 "
             f"'{existing['provider_name']}' 占用，不允许多个 provider 推送同一个服务内端点",
         )
+    # Soft validation: check if target endpoint exists in service config
+    warning = ""
+    arow = db.execute("SELECT config_path FROM adapters WHERE id=?", (b.adapter_id,)).fetchone()
+    config_path = arow["config_path"] if arow else ""
+    current = adapter.read_current(config_path)
+    if current:
+        live_names = set()
+        if "providers" in current:
+            live_names = {p.get("provider_name", "") for p in current["providers"] if p.get("provider_name")}
+        if b.target_provider_name and live_names and b.target_provider_name not in live_names:
+            warning = f"服务内端点 '{b.target_provider_name}' 在 {b.adapter_id} 的配置文件中不存在，绑定已创建但推送可能无效"
     try:
         cur = db.execute(
             "INSERT INTO bindings (provider_id, adapter_id, target_provider_name, auto_sync) VALUES (?,?,?,?)",
@@ -67,11 +102,14 @@ def create_binding(b: BindingCreate, db: sqlite3.Connection = Depends(get_db_dep
            FROM bindings b LEFT JOIN providers p ON b.provider_id=p.id
            LEFT JOIN adapters a ON b.adapter_id=a.id WHERE b.id=?""", (bid,)
     ).fetchone()
-    return BindingOut(
-        id=row["id"], provider_id=row["provider_id"], provider_name=row["p_name"] or "",
-        adapter_id=row["adapter_id"], adapter_label=row["a_label"] or "",
-        target_provider_name=row["target_provider_name"], auto_sync=bool(row["auto_sync"]),
-    )
+    result = {
+        "id": row["id"], "provider_id": row["provider_id"], "provider_name": row["p_name"] or "",
+        "adapter_id": row["adapter_id"], "adapter_label": row["a_label"] or "",
+        "target_provider_name": row["target_provider_name"], "auto_sync": bool(row["auto_sync"]),
+    }
+    if warning:
+        result["warning"] = warning
+    return result
 
 
 @router.delete("/bindings/{binding_id}")
@@ -103,7 +141,9 @@ def get_topology(db: sqlite3.Connection = Depends(get_db_dep)):
            FROM bindings b LEFT JOIN providers p ON b.provider_id=p.id"""
     ).fetchall()
 
+    # Build adapter list + collect live service endpoints per adapter
     adapter_list = []
+    adapter_live_endpoints: dict[str, set[str]] = {}
     for aid, adapter in all_adapters().items():
         db_info = adapter_rows.get(aid, {})
         config_path = db_info.get("config_path", adapter.default_config_path)
@@ -111,6 +151,7 @@ def get_topology(db: sqlite3.Connection = Depends(get_db_dep)):
         service_names = []
         if current and "providers" in current:
             service_names = [p.get("provider_name", "") for p in current["providers"] if p.get("provider_name")]
+        adapter_live_endpoints[aid] = set(service_names)
         adapter_list.append({
             "id": aid,
             "label": adapter.label,
@@ -119,12 +160,22 @@ def get_topology(db: sqlite3.Connection = Depends(get_db_dep)):
             "services": service_names,
         })
 
+    # Mark orphaned bindings
+    bindings_out = []
+    for r in bindings_rows:
+        live = adapter_live_endpoints.get(r["adapter_id"], set())
+        orphaned = bool(r["target_provider_name"] and r["target_provider_name"] not in live)
+        bindings_out.append({
+            "id": r["id"], "provider_id": r["provider_id"], "adapter_id": r["adapter_id"],
+            "target_provider_name": r["target_provider_name"], "auto_sync": bool(r["auto_sync"]),
+            "provider_name": r["provider_name"] or "", "vendor_id": r["vendor_id"],
+            "orphaned": orphaned,
+        })
+
     return {
         "vendors": [{"id": r["id"], "name": r["name"], "domain": r["domain"], "icon": r["icon"] or ""} for r in vendors_rows],
         "keys": [{"id": r["id"], "vendor_id": r["vendor_id"], "label": r["label"]} for r in keys_rows],
         "providers": [{"id": r["id"], "vendor_id": r["vendor_id"], "vendor_key_id": r["vendor_key_id"], "name": r["name"]} for r in providers_rows],
         "adapters": adapter_list,
-        "bindings": [{"id": r["id"], "provider_id": r["provider_id"], "adapter_id": r["adapter_id"],
-                       "target_provider_name": r["target_provider_name"], "auto_sync": bool(r["auto_sync"]),
-                       "provider_name": r["provider_name"] or "", "vendor_id": r["vendor_id"]} for r in bindings_rows],
+        "bindings": bindings_out,
     }

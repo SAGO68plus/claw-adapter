@@ -1,7 +1,19 @@
 """Vendor service — aggregation queries for vendor data."""
+import json
 from db import decrypt
 from models import VendorOut, VendorKeyNested, ProviderNested
 from utils import mask_key
+
+
+def _parse_extra(raw) -> dict:
+    if not raw:
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    try:
+        return json.loads(raw)
+    except Exception:
+        return {}
 
 
 def build_vendor_out(db, v) -> VendorOut:
@@ -27,6 +39,7 @@ def build_vendor_out(db, v) -> VendorOut:
             id=p["id"], name=p["name"], base_url=p["base_url"],
             vendor_key_id=p["vendor_key_id"],
             vendor_key_label=p["key_label"] or "",
+            extra_config=_parse_extra(p["extra_config"]),
             notes=p["notes"] or "",
         ) for p in providers],
     )

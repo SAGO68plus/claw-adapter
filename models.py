@@ -54,6 +54,7 @@ class ProviderNested(BaseModel):
     base_url: str
     vendor_key_id: Optional[int] = None
     vendor_key_label: str = ""
+    extra_config: dict = {}
     notes: str
 
 class VendorOut(BaseModel):
@@ -72,12 +73,14 @@ class ProviderCreate(BaseModel):
     vendor_key_id: Optional[int] = None
     name: str
     base_url: str
+    extra_config: dict = {}
     notes: str = ""
 
 class ProviderUpdate(BaseModel):
     name: Optional[str] = None
     vendor_key_id: Optional[int] = None
     base_url: Optional[str] = None
+    extra_config: Optional[dict] = None
     notes: Optional[str] = None
 
 class ProviderOut(BaseModel):
@@ -89,6 +92,7 @@ class ProviderOut(BaseModel):
     name: str
     base_url: str
     api_key_masked: str
+    extra_config: dict = {}
     notes: str
 
 # ── Bindings ──

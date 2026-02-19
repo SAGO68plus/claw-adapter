@@ -1,4 +1,5 @@
 """Provider CRUD routes."""
+import json
 import sqlite3
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List
@@ -18,6 +19,17 @@ def _get_key_masked(db, vendor_key_id):
     return mask_key_enc(row["api_key_enc"])
 
 
+def _parse_extra(raw) -> dict:
+    if not raw:
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    try:
+        return json.loads(raw)
+    except Exception:
+        return {}
+
+
 @router.get("/providers", response_model=List[ProviderOut])
 def list_providers(db: sqlite3.Connection = Depends(get_db_dep)):
     rows = db.execute(
@@ -32,6 +44,7 @@ def list_providers(db: sqlite3.Connection = Depends(get_db_dep)):
         vendor_key_id=r["vendor_key_id"], vendor_key_label=r["key_label"] or "",
         name=r["name"], base_url=r["base_url"],
         api_key_masked=mask_key_enc(r["api_key_enc"]) if r["api_key_enc"] else "****",
+        extra_config=_parse_extra(r["extra_config"]),
         notes=r["notes"] or "",
     ) for r in rows]
 
@@ -43,8 +56,8 @@ def create_provider(p: ProviderCreate, db: sqlite3.Connection = Depends(get_db_d
         raise HTTPException(404, "Vendor not found")
     try:
         cur = db.execute(
-            "INSERT INTO providers (vendor_id, vendor_key_id, name, base_url, notes) VALUES (?,?,?,?,?)",
-            (p.vendor_id, p.vendor_key_id, p.name, p.base_url, p.notes),
+            "INSERT INTO providers (vendor_id, vendor_key_id, name, base_url, extra_config, notes) VALUES (?,?,?,?,?,?)",
+            (p.vendor_id, p.vendor_key_id, p.name, p.base_url, json.dumps(p.extra_config, ensure_ascii=False), p.notes),
         )
         db.commit()
         pid = cur.lastrowid
@@ -55,7 +68,9 @@ def create_provider(p: ProviderCreate, db: sqlite3.Connection = Depends(get_db_d
         id=row["id"], vendor_id=row["vendor_id"], vendor_name=vendor["name"],
         vendor_key_id=row["vendor_key_id"], vendor_key_label="",
         name=row["name"], base_url=row["base_url"],
-        api_key_masked=_get_key_masked(db, row["vendor_key_id"]), notes=row["notes"] or "",
+        api_key_masked=_get_key_masked(db, row["vendor_key_id"]),
+        extra_config=_parse_extra(row["extra_config"]),
+        notes=row["notes"] or "",
     )
 
 
@@ -67,6 +82,7 @@ def update_provider(pid: int, p: ProviderUpdate, db: sqlite3.Connection = Depend
     updates, params = [], []
     url_changed = False
     key_changed = False
+    extra_changed = False
     if p.name is not None:
         updates.append("name=?"); params.append(p.name)
     if p.base_url is not None:
@@ -75,6 +91,9 @@ def update_provider(pid: int, p: ProviderUpdate, db: sqlite3.Connection = Depend
     if p.vendor_key_id is not None:
         updates.append("vendor_key_id=?"); params.append(p.vendor_key_id)
         key_changed = True
+    if p.extra_config is not None:
+        updates.append("extra_config=?"); params.append(json.dumps(p.extra_config, ensure_ascii=False))
+        extra_changed = True
     if p.notes is not None:
         updates.append("notes=?"); params.append(p.notes)
     if updates:
@@ -84,7 +103,7 @@ def update_provider(pid: int, p: ProviderUpdate, db: sqlite3.Connection = Depend
         db.commit()
     row = db.execute("SELECT * FROM providers WHERE id=?", (pid,)).fetchone()
     vendor = db.execute("SELECT * FROM vendors WHERE id=?", (row["vendor_id"],)).fetchone()
-    if url_changed or key_changed:
+    if url_changed or key_changed or extra_changed:
         from services.sync_engine import sync_provider_to_bindings
         sync_provider_to_bindings(pid)
     return ProviderOut(
@@ -92,7 +111,9 @@ def update_provider(pid: int, p: ProviderUpdate, db: sqlite3.Connection = Depend
         vendor_name=vendor["name"] if vendor else "",
         vendor_key_id=row["vendor_key_id"], vendor_key_label="",
         name=row["name"], base_url=row["base_url"],
-        api_key_masked=_get_key_masked(db, row["vendor_key_id"]), notes=row["notes"] or "",
+        api_key_masked=_get_key_masked(db, row["vendor_key_id"]),
+        extra_config=_parse_extra(row["extra_config"]),
+        notes=row["notes"] or "",
     )
 
 

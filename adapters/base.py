@@ -19,6 +19,9 @@ class BaseAdapter(ABC):
     @abstractmethod
     def apply(self, config_path: str, base_url: str, api_key: str, **kwargs) -> bool:
         """Write the provider config into the service's config file.
+        kwargs may include:
+          - provider_name: target endpoint name in the service config
+          - extra_fields: dict of additional connection-related fields (e.g. api protocol)
         Returns True on success."""
         ...
 

@@ -1,13 +1,25 @@
 """Sync engine — core sync/push/import business logic, decoupled from routes."""
+import json
 from urllib.parse import urlparse
 from db import get_db_ctx, encrypt
 from adapters import get_adapter, all_adapters
 from utils import resolve_api_key
 
 
-def do_apply(adapter, config_path: str, base_url: str, api_key: str, target_name: str) -> bool:
+def _parse_extra(raw) -> dict:
+    if not raw:
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    try:
+        return json.loads(raw)
+    except Exception:
+        return {}
+
+
+def do_apply(adapter, config_path: str, base_url: str, api_key: str, target_name: str, extra_fields: dict = None) -> bool:
     """Apply config to an adapter, return ok bool."""
-    return adapter.apply(config_path, base_url, api_key, provider_name=target_name)
+    return adapter.apply(config_path, base_url, api_key, provider_name=target_name, extra_fields=extra_fields or {})
 
 
 def sync_provider_to_bindings(provider_id: int) -> list:
@@ -24,13 +36,14 @@ def sync_provider_to_bindings(provider_id: int) -> list:
         if not bindings:
             return []
         api_key = resolve_api_key(db, provider)
+        extra = _parse_extra(provider["extra_config"])
     results = []
     for b in bindings:
         adapter = get_adapter(b["adapter_id"])
         if not adapter:
             results.append({"adapter": b["adapter_id"], "target": b["target_provider_name"], "ok": False})
             continue
-        ok = do_apply(adapter, b["config_path"] or "", provider["base_url"], api_key, b["target_provider_name"])
+        ok = do_apply(adapter, b["config_path"] or "", provider["base_url"], api_key, b["target_provider_name"], extra)
         results.append({"adapter": b["adapter_id"], "target": b["target_provider_name"], "ok": ok})
     return results
 
@@ -67,8 +80,20 @@ def do_push(adapter_id: str, provider_id: int, target_provider_name: str = "") -
         arow = db.execute("SELECT config_path FROM adapters WHERE id=?", (adapter_id,)).fetchone()
         config_path = arow["config_path"] if arow else ""
         api_key = resolve_api_key(db, row)
+        extra = _parse_extra(row["extra_config"])
         pname = target_provider_name or row["name"]
-        ok = do_apply(adapter, config_path, row["base_url"], api_key, pname)
+
+        # Orphan detection: warn if target endpoint doesn't exist in service config
+        warning = ""
+        current = adapter.read_current(config_path)
+        if current:
+            live_names = set()
+            if "providers" in current:
+                live_names = {p.get("provider_name", "") for p in current["providers"] if p.get("provider_name")}
+            if pname and live_names and pname not in live_names:
+                warning = f"服务内端点 '{pname}' 在 {adapter_id} 的配置文件中不存在，推送可能无效"
+
+        ok = do_apply(adapter, config_path, row["base_url"], api_key, pname, extra)
         if not ok:
             return {"ok": False, "error": f"Failed to apply config to {adapter_id}"}
         # Check if target endpoint already occupied by a different provider
@@ -83,7 +108,10 @@ def do_push(adapter_id: str, provider_id: int, target_provider_name: str = "") -
             (provider_id, adapter_id, pname),
         )
         db.commit()
-    return {"ok": True, "adapter": adapter_id, "provider": row["name"], "target_provider_name": pname}
+    result = {"ok": True, "adapter": adapter_id, "provider": row["name"], "target_provider_name": pname}
+    if warning:
+        result["warning"] = warning
+    return result
 
 
 def do_import(adapter_id: str) -> dict:
@@ -145,11 +173,17 @@ def do_import(adapter_id: str) -> dict:
                 )
                 db.commit()
                 kid = cur.lastrowid
+            # Extract connection-related extra fields
+            extra = {}
+            if item.get("api"):
+                extra["api"] = item["api"]
+            extra_json = json.dumps(extra, ensure_ascii=False) if extra else "{}"
+
             provider_name = f"{adapter_id}-{pname}"
             try:
                 cur = db.execute(
-                    "INSERT INTO providers (vendor_id, vendor_key_id, name, base_url, notes) VALUES (?,?,?,?,?)",
-                    (vid, kid, provider_name, base_url, f"Imported from {adapter.label}"),
+                    "INSERT INTO providers (vendor_id, vendor_key_id, name, base_url, extra_config, notes) VALUES (?,?,?,?,?,?)",
+                    (vid, kid, provider_name, base_url, extra_json, f"Imported from {adapter.label}"),
                 )
                 db.commit()
                 pid = cur.lastrowid

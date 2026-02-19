@@ -38,15 +38,22 @@ class OpenClawAdapter(BaseAdapter):
             data = json.load(f)
         providers = data.setdefault("models", {}).setdefault("providers", {})
         target = kwargs.get("provider_name", "")
+        extra = kwargs.get("extra_fields", {})
         if target and target in providers:
-            # Update specific provider
             providers[target]["baseUrl"] = base_url
             providers[target]["apiKey"] = api_key
+            if "api" in extra:
+                providers[target]["api"] = extra["api"]
+        elif target:
+            # Target specified but not found — refuse to write
+            return False
         else:
-            # Update all providers
+            # No target specified — update all providers
             for name in providers:
                 providers[name]["baseUrl"] = base_url
                 providers[name]["apiKey"] = api_key
+                if "api" in extra:
+                    providers[name]["api"] = extra["api"]
         with open(path, "w") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         return True

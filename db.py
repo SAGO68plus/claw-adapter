@@ -85,6 +85,7 @@ def init_db():
             vendor_key_id INTEGER DEFAULT NULL,
             name TEXT NOT NULL UNIQUE,
             base_url TEXT NOT NULL,
+            extra_config TEXT NOT NULL DEFAULT '{}',
             notes TEXT DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -154,6 +155,8 @@ def init_db():
     provider_cols = [r[1] for r in cur.fetchall()]
     if "vendor_key_id" not in provider_cols:
         conn.execute("ALTER TABLE providers ADD COLUMN vendor_key_id INTEGER DEFAULT NULL REFERENCES vendor_keys(id) ON DELETE SET NULL")
+    if "extra_config" not in provider_cols:
+        conn.execute("ALTER TABLE providers ADD COLUMN extra_config TEXT NOT NULL DEFAULT '{}'")
     # Migrate api_key_enc from vendors → vendor_keys (v0.3 → v0.4)
     if "api_key_enc" in vendor_cols:
         rows = conn.execute("SELECT id, api_key_enc FROM vendors WHERE api_key_enc IS NOT NULL AND api_key_enc != ''").fetchall()

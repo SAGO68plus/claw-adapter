@@ -82,13 +82,33 @@ class SillyTavernAdapter(BaseAdapter):
         ok = True
         provider_name = kwargs.get("provider_name", "")
 
-        # Update secrets.json — set active key
+        # Read secrets first (needed for both secrets update and profile update)
         secrets_p = self._secrets_path(config_path)
+        secrets = {}
         if os.path.exists(secrets_p):
             with open(secrets_p, "r") as f:
                 secrets = json.load(f)
+
+        # If a specific provider_name is given, verify it exists in profiles
+        settings_p = self._settings_path(config_path)
+        settings = {}
+        if os.path.exists(settings_p):
+            with open(settings_p, "r") as f:
+                settings = json.load(f)
+
+        if provider_name:
+            cm = settings.get("connectionManager", {})
+            if not cm:
+                cm = settings.get("extension_settings", {}).get("connectionManager", {})
+            profiles = cm.get("profiles", [])
+            profile_names = {p.get("name", "") for p in profiles}
+            if profiles and provider_name not in profile_names:
+                # Target profile not found — refuse to write
+                return False
+
+        # Update secrets.json — set active key
+        if os.path.exists(secrets_p):
             keys = secrets.get("api_key_custom", [])
-            # Deactivate all, then set new active
             for k in keys:
                 k["active"] = False
             found = False
@@ -111,12 +131,7 @@ class SillyTavernAdapter(BaseAdapter):
             ok = False
 
         # Update settings.json
-        settings_p = self._settings_path(config_path)
         if os.path.exists(settings_p):
-            with open(settings_p, "r") as f:
-                settings = json.load(f)
-
-            # Try to update connectionManager profile by name
             cm = settings.get("connectionManager", {})
             if not cm:
                 cm = settings.get("extension_settings", {}).get("connectionManager", {})
@@ -126,9 +141,8 @@ class SillyTavernAdapter(BaseAdapter):
                 for p in profiles:
                     if p.get("name") == provider_name:
                         p["api-url"] = base_url
-                        # Find or create secret-id for this key
                         secret_id = ""
-                        for k in secrets.get("api_key_custom", []) if os.path.exists(secrets_p) else []:
+                        for k in secrets.get("api_key_custom", []):
                             if k["value"] == api_key:
                                 secret_id = k["id"]
                                 break
@@ -137,13 +151,13 @@ class SillyTavernAdapter(BaseAdapter):
                         profile_updated = True
                         break
 
-            # Also update selected_proxy as fallback
-            if base_url:
-                settings["selected_proxy"] = {
-                    "name": provider_name or "api-vault",
-                    "url": base_url,
-                    "password": api_key,
-                }
+            if profile_updated or not provider_name:
+                if base_url:
+                    settings["selected_proxy"] = {
+                        "name": provider_name or "api-vault",
+                        "url": base_url,
+                        "password": api_key,
+                    }
 
             with open(settings_p, "w") as f:
                 json.dump(settings, f, indent=2, ensure_ascii=False)
