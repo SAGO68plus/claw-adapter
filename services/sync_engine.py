@@ -71,6 +71,13 @@ def do_push(adapter_id: str, provider_id: int, target_provider_name: str = "") -
         ok = do_apply(adapter, config_path, row["base_url"], api_key, pname)
         if not ok:
             return {"ok": False, "error": f"Failed to apply config to {adapter_id}"}
+        # Check if target endpoint already occupied by a different provider
+        existing = db.execute(
+            "SELECT provider_id FROM bindings WHERE adapter_id=? AND target_provider_name=?",
+            (adapter_id, pname),
+        ).fetchone()
+        if existing and existing["provider_id"] != provider_id:
+            return {"ok": False, "error": f"服务内端点 '{pname}' 在 {adapter_id} 中已被其他 provider 占用"}
         db.execute(
             "INSERT OR IGNORE INTO bindings (provider_id, adapter_id, target_provider_name, auto_sync) VALUES (?,?,?,1)",
             (provider_id, adapter_id, pname),
@@ -146,11 +153,17 @@ def do_import(adapter_id: str) -> dict:
                 )
                 db.commit()
                 pid = cur.lastrowid
-                db.execute(
-                    "INSERT OR IGNORE INTO bindings (provider_id, adapter_id, target_provider_name, auto_sync) VALUES (?,?,?,1)",
-                    (pid, adapter_id, pname),
-                )
-                db.commit()
+                # Check target endpoint not already occupied
+                existing_bind = db.execute(
+                    "SELECT provider_id FROM bindings WHERE adapter_id=? AND target_provider_name=?",
+                    (adapter_id, pname),
+                ).fetchone()
+                if not existing_bind or existing_bind["provider_id"] == pid:
+                    db.execute(
+                        "INSERT OR IGNORE INTO bindings (provider_id, adapter_id, target_provider_name, auto_sync) VALUES (?,?,?,1)",
+                        (pid, adapter_id, pname),
+                    )
+                    db.commit()
                 imported.append({"id": pid, "name": provider_name, "vendor_id": vid, "bound_to": pname})
             except Exception:
                 pass

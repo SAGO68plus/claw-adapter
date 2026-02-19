@@ -17,3 +17,6 @@ uploads/
 .vscode/
 .idea/
 *:Zone.Identifier
+
+# docs
+docs/

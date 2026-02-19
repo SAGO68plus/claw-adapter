@@ -40,6 +40,19 @@ def create_binding(b: BindingCreate, db: sqlite3.Connection = Depends(get_db_dep
     adapter = get_adapter(b.adapter_id)
     if not adapter:
         raise HTTPException(404, "Adapter not found")
+    # Check: target endpoint already occupied by another provider
+    existing = db.execute(
+        "SELECT b.id, p.name as provider_name FROM bindings b "
+        "LEFT JOIN providers p ON b.provider_id = p.id "
+        "WHERE b.adapter_id=? AND b.target_provider_name=?",
+        (b.adapter_id, b.target_provider_name),
+    ).fetchone()
+    if existing:
+        raise HTTPException(
+            409,
+            f"服务内端点 '{b.target_provider_name}' 在 {b.adapter_id} 中已被端点配置 "
+            f"'{existing['provider_name']}' 占用，不允许多个 provider 推送同一个服务内端点",
+        )
     try:
         cur = db.execute(
             "INSERT INTO bindings (provider_id, adapter_id, target_provider_name, auto_sync) VALUES (?,?,?,?)",

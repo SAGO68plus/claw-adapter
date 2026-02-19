@@ -107,7 +107,8 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (provider_id) REFERENCES providers(id) ON DELETE CASCADE,
             FOREIGN KEY (adapter_id) REFERENCES adapters(id) ON DELETE CASCADE,
-            UNIQUE(provider_id, adapter_id, target_provider_name)
+            UNIQUE(provider_id, adapter_id, target_provider_name),
+            UNIQUE(adapter_id, target_provider_name)
         );
         CREATE TABLE IF NOT EXISTS request_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -169,5 +170,24 @@ def init_db():
             conn.execute("ALTER TABLE vendors DROP COLUMN api_key_enc")
         except Exception:
             pass  # older SQLite, column stays but is unused
+    # Add UNIQUE(adapter_id, target_provider_name) to bindings if missing
+    cur = conn.execute("PRAGMA index_list(bindings)")
+    idx_names = [r[1] for r in cur.fetchall()]
+    has_target_unique = False
+    for idx_name in idx_names:
+        cols = [r[2] for r in conn.execute(f"PRAGMA index_info({idx_name})").fetchall()]
+        if set(cols) == {"adapter_id", "target_provider_name"} or \
+           (len(cols) == 2 and "adapter_id" in str(cols) and "target_provider_name" in str(cols)):
+            # Check by column names from index_info (which returns seq, cid, name)
+            col_names = [r[2] for r in conn.execute(f"PRAGMA index_info({idx_name})").fetchall()]
+            if set(col_names) == {"adapter_id", "target_provider_name"}:
+                has_target_unique = True
+                break
+    if not has_target_unique:
+        try:
+            conn.execute("CREATE UNIQUE INDEX uq_bindings_adapter_target ON bindings(adapter_id, target_provider_name)")
+        except Exception:
+            pass  # index may already exist under different name
+
     conn.commit()
     conn.close()
