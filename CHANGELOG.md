@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Sankey topology: output links clustered at top half of adapter nodes when multiple providers connect to the same adapter
+- Replaced `computeWeights` with flow-balanced `propagateFlow` — scales provider→adapter input links proportionally so input flow = output flow at every adapter node, then propagates upstream to key and vendor layers
+
 ## [0.3.2] - 2026-02-19
 
 ### Added

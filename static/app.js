@@ -904,22 +904,51 @@ function buildAdj(nodes, links) {
 }
 
 // Compute leaf-count weight bottom-up
-function computeWeights(nodes, links) {
-  var adj = buildAdj(nodes, links);
-  var weights = {};
-  function getWeight(name) {
-    if (weights[name] !== undefined) return weights[name];
-    var children = adj.fwd[name] || [];
-    if (!children.length) { weights[name] = 1; return 1; }
-    var sum = 0;
-    children.forEach(function(c) { sum += getWeight(c.node); });
-    weights[name] = sum;
-    return sum;
-  }
-  nodes.forEach(function(n) { getWeight(n.name); });
-  // Set link values = weight of target node
-  links.forEach(function(l) { l.value = weights[l.target] || 1; });
-  return weights;
+// ── Flow-balanced link value propagation ──
+// 1. Balance adapter nodes: scale provider→adapter input links so input = output
+// 2. Propagate upward to key→provider and vendor→key layers
+function propagateFlow(links) {
+  // Step 0: Balance adapter nodes — ensure input flow = output flow
+  var adapterOutFlow = {};
+  var adapterInFlow = {};
+  var adapterInLinks = {};
+  links.forEach(function(l, i) {
+    if (l.source.indexOf('a_') === 0) {
+      adapterOutFlow[l.source] = (adapterOutFlow[l.source] || 0) + l.value;
+    }
+    if (l.target.indexOf('a_') === 0) {
+      adapterInFlow[l.target] = (adapterInFlow[l.target] || 0) + l.value;
+      if (!adapterInLinks[l.target]) adapterInLinks[l.target] = [];
+      adapterInLinks[l.target].push(i);
+    }
+  });
+  Object.keys(adapterOutFlow).forEach(function(aKey) {
+    var outTotal = adapterOutFlow[aKey] || 0;
+    var inTotal = adapterInFlow[aKey] || 0;
+    if (inTotal > 0 && outTotal > inTotal) {
+      var scale = outTotal / inTotal;
+      (adapterInLinks[aKey] || []).forEach(function(idx) {
+        links[idx].value = links[idx].value * scale;
+      });
+    }
+  });
+
+  // Pass 1: key→provider links inherit provider's total outgoing flow
+  var providerOut = {};
+  links.forEach(function(l) {
+    if (l.source.indexOf('p_') === 0) providerOut[l.source] = (providerOut[l.source] || 0) + l.value;
+  });
+  links.forEach(function(l) {
+    if (l.target.indexOf('p_') === 0) l.value = providerOut[l.target] || 1;
+  });
+  // Pass 2: vendor→key links inherit key's total outgoing flow
+  var keyOut = {};
+  links.forEach(function(l) {
+    if (l.source.indexOf('k_') === 0) keyOut[l.source] = (keyOut[l.source] || 0) + l.value;
+  });
+  links.forEach(function(l) {
+    if (l.target.indexOf('k_') === 0) l.value = keyOut[l.target] || 1;
+  });
 }
 
 // Trace full path from a node (both directions)
@@ -1059,8 +1088,8 @@ async function loadTopology() {
       }
     });
 
-    // Compute weights so node heights and link widths match
-    computeWeights(nodes, links);
+    // Propagate flow values bottom-up (flow-conserving)
+    propagateFlow(links);
     _topoNodes = nodes;
     _topoLinks = links;
 
