@@ -24,7 +24,6 @@
 ## 🚧 开发中
 
 - API 站计价功能正在制作中
-- 桑基图部分显示效果待优化
 
 ## 简介
 
@@ -33,7 +32,7 @@
 ClawAdapter 把服务商、密钥、下游服务的配置集中到一处管理，绑定之后改一次就能同步到所有关联的服务。
 
 <p align="center">
-  <img src="imgFrontPage.png" width="800" alt="ClawAdapter 界面">
+  <img src="imgFrontPage.png?v=20260224" width="800" alt="ClawAdapter 界面">
 </p>
 
 ## 架构

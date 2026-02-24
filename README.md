@@ -34,7 +34,7 @@ Managing API keys across multiple AI services is painful — each service has it
 ClawAdapter centralizes vendor, key, and downstream service configuration in one place. Once bound, a single change syncs to all linked services automatically.
 
 <p align="center">
-  <img src="imgFrontPage.png" width="800" alt="ClawAdapter UI">
+  <img src="imgFrontPage.png?v=20260224" width="800" alt="ClawAdapter UI">
 </p>
 
 ## Architecture
