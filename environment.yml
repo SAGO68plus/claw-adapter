@@ -1,0 +1,12 @@
+name: claw-adapter
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - fastapi
+  - uvicorn
+  - cryptography
+  - pip
+  - pip:
+    - python-multipart

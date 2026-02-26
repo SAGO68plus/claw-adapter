@@ -1,22 +1,27 @@
-# Secrets
-.vault_key
-
-# Databases
-*.db
-*.db.bak
-
-# Python
+# Python specific
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
+.Python
+env/
+venv/
+lib/
+include/
+bin/
+share/
 
-# Uploads (user content)
-uploads/
-
-# IDE
+# IDE specific
 .vscode/
 .idea/
 *:Zone.Identifier
 
-# docs
+# ClawAdapter specific
+vault.db
+.vault_key
+uploads/
 docs/
+
+# Databases
+*.db
+*.db.bak

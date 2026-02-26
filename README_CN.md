@@ -61,6 +61,17 @@ Vendor → Key → Provider → Adapter → Service
 pip install fastapi uvicorn cryptography python-multipart
 ```
 
+### Conda 部署 (可选，推荐)
+
+如果您使用 Conda 环境，可以通过项目根目录下的 `environment.yml` 文件一步到位地创建和激活环境，确保 Python 版本和所有依赖项正确配置：
+
+```bash
+conda env create -f environment.yml
+conda activate claw-adapter
+```
+
+激活环境后，即可继续执行后续启动命令。
+
 ### 启动
 
 ```bash
